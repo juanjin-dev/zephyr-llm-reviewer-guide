@@ -566,6 +566,11 @@ USB/CDC를 켜지 말 것, 보드 전용 Kconfig를 실드가 참조하지 말 �
 11. UART FIFO flush(Copilot) [#121242](https://github.com/zephyrproject-rtos/zephyr/pull/121242).
 12. 반환값 확인 [#119534](https://github.com/zephyrproject-rtos/zephyr/pull/119534).
 13. 빈 줄 정리 [#118891](https://github.com/zephyrproject-rtos/zephyr/pull/118891).
+14. **드라이버 동기화는 `struct k_sem`** — 접근 제어/완료 대기는 뮤텍스보다 세마포어를
+    씁니다. [#113278](https://github.com/zephyrproject-rtos/zephyr/pull/113278): JordanYates
+    — "Most drivers use semaphores rather than mutexes for access control, since they are
+    lower overhead and generally we don't actually expect any contention for the resource."
+    → `struct k_sem`로 교체.
 
 ### 9.8 Kernel — nashif·maass-hamburg·sylvioalves
 
