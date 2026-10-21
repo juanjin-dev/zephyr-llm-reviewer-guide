@@ -650,6 +650,49 @@ USB/CDC를 켜지 말 것, 보드 전용 Kconfig를 실드가 참조하지 말 �
 - 리뷰 사례 [#118531](https://github.com/zephyrproject-rtos/zephyr/pull/118531):
   pdgendt — "Use `k_timepoint_t` instead."
 
+### 9.11 칩 패밀리 드라이버 지향 (드라이버 설계 관례)
+
+같은 레지스터 맵을 공유하고 해상도·핀 기능·채널 수만 다른 칩들은 **드라이버 하나로**
+처리하는 것이 관례입니다. `juanjin-dev`의 병합된 ADC 드라이버가 표준 예시입니다.
+
+**예시 1 — ADS7828/ADS7830** [#114359](https://github.com/zephyrproject-rtos/zephyr/pull/114359):
+- 드라이버 하나: `drivers/adc/adc_ads7828.c`.
+- 바인딩: `dts/bindings/adc/ti,ads7828-base.yaml`(공통 필드, `compatible` 없음) +
+  `ti,ads7828.yaml`/`ti,ads7830.yaml`(각각 `compatible` + `include: ti,ads7828-base.yaml`).
+- Kconfig 하나: `ADC_ADS7828`, `depends on DT_HAS_TI_ADS7828_ENABLED ||
+  DT_HAS_TI_ADS7830_ENABLED`.
+
+**예시 2 — ADCxx1C 패밀리(6종)** [#114289](https://github.com/zephyrproject-rtos/zephyr/pull/114289):
+- 드라이버 하나: `drivers/adc/adc_adcxx1c.c`.
+- 바인딩: `ti,adcxx1c-base.yaml` + 칩별 6개(`ti,adc081c021.yaml`, `ti,adc081c027.yaml`,
+  `ti,adc101c021.yaml`, `ti,adc101c027.yaml`, `ti,adc121c021.yaml`, `ti,adc121c027.yaml`).
+- Kconfig 하나: `ADC_ADCXX1C`, 6개 compatible의 `DT_HAS_..._ENABLED` OR로 의존.
+- Kconfig help의 근거 문구: "The six devices share one register map and differ only in
+  resolution (8, 10 or 12 bit) and in the function of one package pin, so they are all
+  handled by a single driver."
+
+**예시 3 — WIZnet W5100S (공용 MACRAW 코어)** [#113315](https://github.com/zephyrproject-rtos/zephyr/pull/113315):
+**리뷰어가 명시적으로 패밀리 구조를 요구한 사례**입니다.
+
+- parthitce: "This is almost a straight copy of eth_w5500.c. The only real differences are
+  the SPI framing, the PHY status bit polarity, and the NETLCKR unlock. IMO it makes sense
+  to wrap around with one shared MACRAW core and per-chip structs."
+- 결과 구조: `drivers/ethernet/wiznet/eth_wiznet.c`(공용 MACRAW "socket 0" 코어) +
+  칩별 `eth_w5100s.c` + 공용 `eth_wiznet.h`. 기존 W5500/W6100도 이 공용 코어로 이동.
+- Kconfig 공용화(maass-hamburg): "I think these Kconfigs can be shared for all wiznet
+  drivers" → `CONFIG_ETH_WIZNET_*` 5개로 통합(구 칩별 이름은 마이그레이션 가이드에).
+- `struct ethernet_api`를 구조체 첫 멤버로 두어 api로 사용(maass-hamburg).
+- `reset-gpios`/`int-gpios` 존재 시에만 `select GPIO`(maass-hamburg).
+
+**패턴 요약:**
+- 드라이버 `.c` 1개 = 칩 패밀리 1개(공용 코어 + 칩별 파일).
+- 바인딩 = `<vendor>,<family>-base.yaml`(공통 필드, `compatible` 없음) + 칩별
+  `<vendor>,<chip>.yaml`(`compatible` + `include: <vendor>,<family>-base.yaml`).
+- Kconfig 1개 = 패밀리 1개, `depends on DT_HAS_<CHIP>_ENABLED`를 OR로 나열.
+- 칩별 차이(해상도 등)는 DT 속성 또는 compatible 파생 값으로 처리합니다.
+- **칩을 하나 더 추가할 때 기존 드라이버의 복사본이면, 리뷰어가 공용 코어로의
+  리팩터링을 요구합니다**(parthitce, #113315).
+
 ---
 
 ## 10. 시사점 (로컬 리뷰에 반영)
@@ -662,5 +705,3 @@ USB/CDC를 켜지 말 것, 보드 전용 Kconfig를 실드가 참조하지 말 �
 - **BSP 리뷰에서 가장 자주 걸리는 것**: 저작권 헤더, doc 이미지 용량/링크, 타 보드
   일관성, 복붙 오류, `ranges`/`clocks`/`sda-gpios` 등 DT 누락, mapped partitions,
   board hook, 보드 전용 Kconfig 참조, CDC ACM을 실드가 켜는 것.
-
-
